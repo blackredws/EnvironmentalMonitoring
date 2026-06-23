@@ -4,13 +4,7 @@
 
 This project implements an IoT Environmental Monitoring System using MQTT and Python.
 
-The system simulates environmental sensors that generate temperature and humidity data.
-
-The data is transmitted through an MQTT broker (Mosquitto), processed by a Python subscriber, and stored in different database platforms:
-
-* MySQL for temperature data
-* MongoDB for humidity data
-* Neo4j for sensor relationships
+The system simulates environmental sensors, transmits data through an MQTT broker, processes the data in Python, and stores it in multiple database platforms.
 
 ## Technologies Used
 
@@ -19,17 +13,30 @@ The data is transmitted through an MQTT broker (Mosquitto), processed by a Pytho
 * MySQL
 * MongoDB
 * Neo4j
-
-## System Architecture
-
-Sensor Simulator → MQTT Broker → Python Subscriber → Databases
+* Streamlit
 
 ## Features
 
 * Real-time MQTT communication
-* Temperature storage in MySQL
-* Humidity storage in MongoDB
-* Sensor relationship management in Neo4j
+* Temperature data storage in MySQL
+* Humidity data storage in MongoDB
+* Sensor relationship modeling in Neo4j
+* Real-time dashboard using Streamlit
+* Data visualization using charts and tables
+
+## System Architecture
+
+Publisher → MQTT Broker → Subscriber → Databases
+
+Databases:
+
+* MySQL (structured sensor measurements)
+* MongoDB (document-oriented sensor/device data)
+* Neo4j (sensor relationships)
+
+Dashboard:
+
+* Streamlit visualization layer
 
 ## Author
 
