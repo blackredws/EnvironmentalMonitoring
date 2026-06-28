@@ -1,243 +1,215 @@
-# Environmental Monitoring System
+# 🌍 Smart Campus Environmental Monitoring System
 
-## Overview
+## Database Mod B Project
 
-This project implements an IoT Environmental Monitoring System using MQTT, Python, MySQL, MongoDB, Neo4j, and Streamlit.
+**University of Messina**
+**Academic Year:** 2025/2026
 
-The system simulates environmental sensors that generate temperature and humidity data. The generated data is transmitted through an MQTT broker, processed by a Python subscriber, and stored in multiple database platforms according to the nature of the data. A Streamlit dashboard provides real-time visualization of the collected information.
-
-The project demonstrates the integration of different database technologies within a single IoT application and highlights the advantages of relational, document-oriented, and graph databases.
-
----
-
-## Project Objectives
-
-The main objectives of this project are:
-
-* Simulate environmental IoT sensors.
-* Collect sensor data using MQTT.
-* Process incoming messages using Python.
-* Store structured data in MySQL.
-* Store document-oriented data in MongoDB.
-* Model relationships using Neo4j.
-* Visualize collected data through a Streamlit dashboard.
-* Demonstrate the use of multiple database technologies in a single system.
+**Student:** Surafel Hunegnaw
 
 ---
 
-## Technologies Used
+# Project Overview
 
-### Programming Language
+This project demonstrates a complete Internet of Things (IoT) environmental monitoring system using **MQTT**, **Python**, **MySQL**, **MongoDB**, **Neo4j**, and **Streamlit**.
+
+The system simulates environmental sensors installed across a smart campus. These sensors periodically generate temperature, humidity, device, and network information.
+
+Python applications receive MQTT messages and automatically store each type of information in the most appropriate database.
+
+Finally, a Streamlit dashboard visualizes the collected data in real time.
+
+---
+
+# Technologies
 
 * Python
-
-### Messaging Protocol
-
-* MQTT
-
-### MQTT Broker
-
-* Eclipse Mosquitto
-
-### Databases
-
+* Eclipse Mosquitto MQTT Broker
 * MySQL
 * MongoDB
 * Neo4j
-
-### Dashboard and Visualization
-
 * Streamlit
 * Pandas
-* Plotly
+* Paho MQTT
 
 ---
 
-## System Architecture
+# System Architecture
 
-Environmental Sensor Simulator
-
-↓
-
-MQTT Publisher
-
-↓
-
-Mosquitto MQTT Broker
-
-↓
-
-Python Subscriber
-
-↓
-
-MySQL (Structured Sensor Data)
-
-MongoDB (Document-Based Sensor Data)
-
-Neo4j (Sensor Relationships)
-
-↓
-
-Streamlit Dashboard
+```
+Publisher.py
+        │
+        ▼
+ MQTT Broker (Mosquitto)
+        │
+        ▼
+ Subscriber.py
+        │
+ ┌──────┼─────────┐
+ ▼      ▼         ▼
+MySQL MongoDB   Neo4j
+        │
+        ▼
+ Streamlit Dashboard
+```
 
 ---
 
-## Database Design
+# Database Responsibilities
 
-### MySQL
+## MySQL
 
-MySQL is used to store structured environmental measurements such as:
+Stores structured environmental measurements.
+
+Table:
+
+* measurements
+
+Contains:
 
 * Sensor ID
 * Temperature
+* Humidity
 * Timestamp
 
-Relational databases are suitable for highly structured and tabular data.
+Another table:
 
-### MongoDB
+* alerts
 
-MongoDB is used to store flexible sensor and environmental information in document format.
+Automatically populated using a MySQL AFTER INSERT Trigger whenever dangerous environmental conditions are detected.
 
-Example document:
+---
 
-{
-"sensor": "humidity_sensor_1",
-"humidity": 65.2,
-"timestamp": "2026-06-23"
-}
+## MongoDB
 
-Document databases provide flexibility for storing semi-structured data.
+Stores flexible device metadata.
 
-### Neo4j
+Each document contains:
 
-Neo4j is used to model relationships among:
+* Sensor ID
+* Manufacturer
+* Model
+* Firmware
+* Battery
+* Device Status
+* Last Seen
+
+---
+
+## Neo4j
+
+Models relationships between:
 
 * Sensors
-* Gateways
 * Rooms
+* Buildings
+* Gateways
 
-Example:
-
-Sensor → Gateway → Room
-
-Graph databases are ideal for representing connected entities and relationships.
+This allows efficient graph traversal and visualization of the smart campus network.
 
 ---
 
-## Features
+# MQTT Topics
 
-* Real-time MQTT communication
-* Environmental sensor simulation
-* Temperature data storage in MySQL
-* Humidity data storage in MongoDB
-* Relationship modeling in Neo4j
-* Interactive Streamlit dashboard
-* Data visualization using charts and tables
-* Multi-database integration
+| Topic                   | Database |
+| ----------------------- | -------- |
+| environment/measurement | MySQL    |
+| environment/device      | MongoDB  |
+| environment/network     | Neo4j    |
 
 ---
 
-## Project Files
+# Dashboard Features
 
-publisher.py
-
-Simulates environmental sensors and publishes MQTT messages.
-
-subscriber.py
-
-Receives MQTT messages and stores data in the databases.
-
-dashboard.py
-
-Displays real-time environmental information through a Streamlit dashboard.
-
-requirements.txt
-
-Contains all required Python libraries.
-
-README.md
-
-Project documentation.
+* Live Temperature
+* Live Humidity
+* System Status
+* Automatic Alert Display
+* Temperature Chart
+* Humidity Chart
+* Measurements Table
+* Alerts Table
+* Device Information
+* Campus Network Summary
 
 ---
 
-## Installation
+# Business Rules
 
-### Install Required Libraries
+1. Each sensor has a unique Sensor ID.
 
+2. Every environmental measurement belongs to one sensor.
+
+3. Measurements are stored in MySQL.
+
+4. Device metadata is stored in MongoDB.
+
+5. Network topology is stored in Neo4j.
+
+6. Dangerous environmental conditions automatically generate alerts through a MySQL Trigger.
+
+---
+
+# Project Workflow
+
+1. Publisher simulates IoT sensors.
+
+2. MQTT Broker forwards messages.
+
+3. Subscriber receives MQTT topics.
+
+4. Subscriber stores each message in the correct database.
+
+5. Streamlit reads data from all databases.
+
+6. Dashboard visualizes the environmental monitoring system.
+
+---
+
+# Installation
+
+Install dependencies
+
+```
 pip install -r requirements.txt
+```
 
-### Start MongoDB
+Run the MQTT Broker.
 
-Start the MongoDB service and connect using MongoDB Compass.
+Run:
 
-### Start MySQL
-
-Open MySQL Workbench and connect to the local instance.
-
-### Start Neo4j
-
-Open Neo4j Desktop and start the database.
-
-### Start MQTT Subscriber
-
+```
 python subscriber.py
+```
 
-### Start MQTT Publisher
+Open another terminal:
 
+```
 python publisher.py
+```
 
-### Launch Dashboard
+Finally:
 
+```
 streamlit run dashboard.py
+```
 
 ---
 
-## Dashboard
+# Future Improvements
 
-The Streamlit dashboard displays:
-
-* Current temperature values
-* Current humidity values
-* Number of records stored in MySQL
-* Number of documents stored in MongoDB
-* Temperature charts
-* Humidity charts
-* Database tables
-
-The dashboard provides a user-friendly interface for monitoring environmental data in real time.
-
----
-
-## Future Improvements
-
-Possible future enhancements include:
-
-* Integration with real IoT sensors
-* Air quality monitoring
+* Physical IoT sensor integration
 * Cloud deployment
-* Apache Spark integration for big data analytics
-* Machine learning prediction models
-* Mobile application support
+* Email notifications
+* Predictive analytics
 * Docker containerization
 
 ---
 
-## Author
+# Author
 
 Surafel Hunegnaw
 
-GitHub Username: blackredws
+University of Messina
 
-Repository:
-
-https://github.com/blackredws/EnvironmentalMonitoring
-
----
-
-## Conclusion
-
-This project successfully demonstrates the integration of MQTT, Python, MySQL, MongoDB, Neo4j, and Streamlit in a unified environmental monitoring platform.
-
-The system collects sensor data, processes it in real time, stores it using multiple database technologies, and visualizes the results through an interactive dashboard. The project provides a practical example of modern IoT and database integration techniques.
+Database Mod B Project
