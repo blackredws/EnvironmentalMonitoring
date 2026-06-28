@@ -1,97 +1,171 @@
 import json
-from datetime import datetime
 
 import mysql.connector
 import paho.mqtt.client as mqtt
 from pymongo import MongoClient
+from neo4j import GraphDatabase
 
-BROKER = "localhost"
-PORT = 1883
+from config import *
 
 # ==========================
-# MySQL Connection
+# MySQL
 # ==========================
 
 mysql_db = mysql.connector.connect(
-    host="localhost",
-    user="root",
-    password="Sura@1221",
-    database="environmental_monitoring"
+    host=MYSQL_HOST,
+    user=MYSQL_USER,
+    password=MYSQL_PASSWORD,
+    database=MYSQL_DATABASE
 )
 
 mysql_cursor = mysql_db.cursor()
 
 # ==========================
-# MongoDB Connection
+# MongoDB
 # ==========================
 
-mongo_client = MongoClient("mongodb://localhost:27017/")
-mongo_db = mongo_client["environmental_monitoring"]
-humidity_collection = mongo_db["humidity_data"]
+mongo_client = MongoClient(MONGO_URI)
+
+mongo_db = mongo_client[MONGO_DATABASE]
+
+device_collection = mongo_db["devices"]
+
+# ==========================
+# Neo4j
+# ==========================
+
+driver = GraphDatabase.driver(
+    NEO4J_URI,
+    auth=(NEO4J_USERNAME, NEO4J_PASSWORD)
+)
 
 
 # ==========================
-# MQTT Functions
+# MQTT
 # ==========================
 
 def on_connect(client, userdata, flags, reason_code, properties=None):
+
     print("Connected to MQTT Broker")
 
-    client.subscribe("environment/temperature")
-    client.subscribe("environment/humidity")
+    client.subscribe(TOPIC_MEASUREMENT)
+    client.subscribe(TOPIC_DEVICE)
+    client.subscribe(TOPIC_NETWORK)
 
 
 def on_message(client, userdata, msg):
 
     data = json.loads(msg.payload.decode())
 
-    # --------------------------
-    # Temperature -> MySQL
-    # --------------------------
-    if msg.topic == "environment/temperature":
+    # =====================================
+    # MySQL
+    # =====================================
 
-        sensor = data["sensor"]
-        temperature = data["temperature"]
-        timestamp = datetime.now()
+    if msg.topic == TOPIC_MEASUREMENT:
 
         sql = """
-        INSERT INTO temperature_data
-        (sensor, temperature, timestamp)
-        VALUES (%s, %s, %s)
+        INSERT INTO measurements
+        (sensor_id, temperature, humidity, timestamp)
+        VALUES (%s,%s,%s,%s)
         """
 
-        values = (sensor, temperature, timestamp)
+        values = (
+            data["sensor_id"],
+            data["temperature"],
+            data["humidity"],
+            data["timestamp"]
+        )
 
         mysql_cursor.execute(sql, values)
+
         mysql_db.commit()
 
-        print("\nStored Temperature in MySQL")
-        print(data)
+        print("Measurement -> MySQL")
 
-    # --------------------------
-    # Humidity -> MongoDB
-    # --------------------------
-    elif msg.topic == "environment/humidity":
+    # =====================================
+    # MongoDB
+    # =====================================
 
-        document = {
-            "sensor": data["sensor"],
-            "humidity": data["humidity"],
-            "timestamp": datetime.now()
-        }
+    elif msg.topic == TOPIC_DEVICE:
 
-        humidity_collection.insert_one(document)
+        device_collection.update_one(
 
-        print("\nStored Humidity in MongoDB")
-        print(document)
+            {
 
-    print("-" * 50)
+                "_id": data["sensor_id"]
+
+            },
+
+            {
+
+                "$set": {
+
+                    "manufacturer": data["manufacturer"],
+                    "model": data["model"],
+                    "battery": data["battery"],
+                    "firmware": data["firmware"],
+                    "status": data["status"],
+                    "last_seen": data["last_seen"]
+
+                }
+
+            },
+
+            upsert=True
+
+        )
+
+        print("Device -> MongoDB")
+
+    # =====================================
+    # Neo4j
+    # =====================================
+
+    elif msg.topic == TOPIC_NETWORK:
+
+        with driver.session() as session:
+
+            session.run("""
+
+            MERGE (s:Sensor {id:$sensor})
+
+            MERGE (r:Room {name:$room})
+
+            MERGE (b:Building {name:$building})
+
+            MERGE (g:Gateway {name:$gateway})
+
+            MERGE (s)-[:LOCATED_IN]->(r)
+
+            MERGE (r)-[:PART_OF]->(b)
+
+            MERGE (s)-[:CONNECTED_TO]->(g)
+
+            """,
+
+            sensor=data["sensor_id"],
+
+            room=data["room"],
+
+            building=data["building"],
+
+            gateway=data["gateway"]
+
+            )
+
+        print("Network -> Neo4j")
+
+    print(data)
+
+    print("-" * 60)
 
 
 client = mqtt.Client()
 
 client.on_connect = on_connect
+
 client.on_message = on_message
 
-client.connect(BROKER, PORT)
+client.connect(MQTT_BROKER, MQTT_PORT)
 
 client.loop_forever()
