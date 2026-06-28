@@ -2,130 +2,432 @@ import streamlit as st
 import pandas as pd
 import mysql.connector
 from pymongo import MongoClient
+from neo4j import GraphDatabase
+from config import *
+
+# =====================================
+# PAGE CONFIGURATION
+# =====================================
 
 st.set_page_config(
-    page_title="Environmental Monitoring Dashboard",
+    page_title="Smart Campus Environmental Monitoring",
+    page_icon="🌍",
     layout="wide"
 )
 
-st.title("🌍 Environmental Monitoring Dashboard")
+st.title("🌍 Smart Campus Environmental Monitoring System")
+st.markdown("---")
 
-# ==========================
-# MySQL Connection
-# ==========================
+# =====================================
+# MYSQL CONNECTION
+# =====================================
 
 mysql_db = mysql.connector.connect(
-    host="localhost",
-    user="root",
-    password="Sura@1221",
-    database="environmental_monitoring"
+    host=MYSQL_HOST,
+    user=MYSQL_USER,
+    password=MYSQL_PASSWORD,
+    database=MYSQL_DATABASE
 )
 
-query = """
+# =====================================
+# MONGODB CONNECTION
+# =====================================
+
+mongo_client = MongoClient(MONGO_URI)
+mongo_db = mongo_client[MONGO_DATABASE]
+device_collection = mongo_db["devices"]
+
+# =====================================
+# NEO4J CONNECTION
+# =====================================
+
+driver = GraphDatabase.driver(
+    NEO4J_URI,
+    auth=(NEO4J_USERNAME, NEO4J_PASSWORD)
+)
+
+# =====================================
+# LOAD MYSQL DATA
+# =====================================
+
+measurement_query = """
 SELECT *
-FROM temperature_data
+FROM measurements
 ORDER BY timestamp DESC
+LIMIT 300
 """
 
-temperature_df = pd.read_sql(query, mysql_db)
+measurement_df = pd.read_sql(measurement_query, mysql_db)
 
-# ==========================
-# MongoDB Connection
-# ==========================
+alert_query = """
+SELECT *
+FROM alerts
+ORDER BY timestamp DESC
+LIMIT 100
+"""
+alerts_df = pd.read_sql(alert_query, mysql_db)
 
-mongo_client = MongoClient("mongodb://localhost:27017")
+# =====================================
+# LOAD MONGODB DATA
+# =====================================
 
-mongo_db = mongo_client["environmental_monitoring"]
-
-humidity_collection = mongo_db["humidity_data"]
-
-humidity_docs = list(
-    humidity_collection.find(
+devices = list(
+    device_collection.find(
         {},
         {"_id": 0}
     )
 )
 
-humidity_df = pd.DataFrame(humidity_docs)
+device_df = pd.DataFrame(devices)
 
-# ==========================
-# Metrics
-# ==========================
+# =====================================
+# LOAD NEO4J SUMMARY
+# =====================================
+
+with driver.session() as session:
+
+    sensor_count = session.run(
+        "MATCH (s:Sensor) RETURN count(s) AS c"
+    ).single()["c"]
+
+    room_count = session.run(
+        "MATCH (r:Room) RETURN count(r) AS c"
+    ).single()["c"]
+
+    building_count = session.run(
+        "MATCH (b:Building) RETURN count(b) AS c"
+    ).single()["c"]
+
+    gateway_count = session.run(
+        "MATCH (g:Gateway) RETURN count(g) AS c"
+    ).single()["c"]
+
+# =====================================
+# LATEST VALUES
+# =====================================
+
+if measurement_df.empty:
+
+    latest_temp = 0
+    latest_humidity = 0
+
+else:
+
+    latest_temp = measurement_df.iloc[0]["temperature"]
+    latest_humidity = measurement_df.iloc[0]["humidity"]
+
+# =====================================
+# SMART STATUS
+# =====================================
+
+status = "🟢 NORMAL"
+recommendation = "Environment operating within safe limits."
+
+if latest_temp > 35:
+
+    status = "🔴 HIGH TEMPERATURE"
+
+    recommendation = (
+        "Activate cooling system immediately."
+    )
+
+elif latest_humidity > 80:
+
+    status = "🟡 HIGH HUMIDITY"
+
+    recommendation = (
+        "Increase room ventilation."
+    )
+
+# =====================================
+# STATUS PANEL
+# =====================================
+
+st.subheader("🚦 System Status")
+
+if "🔴" in status:
+
+    st.error(status)
+
+elif "🟡" in status:
+
+    st.warning(status)
+
+else:
+
+    st.success(status)
+
+st.info(recommendation)
+
+st.markdown("---")
+
+# =====================================
+# METRICS
+# =====================================
+
+avg_temp = (
+    measurement_df["temperature"].mean()
+    if not measurement_df.empty
+    else 0
+)
+
+avg_humidity = (
+    measurement_df["humidity"].mean()
+    if not measurement_df.empty
+    else 0
+)
+
+max_temp = (
+    measurement_df["temperature"].max()
+    if not measurement_df.empty
+    else 0
+)
+
+max_humidity = (
+    measurement_df["humidity"].max()
+    if not measurement_df.empty
+    else 0
+)
 
 col1, col2, col3, col4 = st.columns(4)
 
-if not temperature_df.empty:
-    latest_temp = temperature_df.iloc[0]["temperature"]
-else:
-    latest_temp = 0
-
-if not humidity_df.empty:
-    latest_humidity = humidity_df.iloc[-1]["humidity"]
-else:
-    latest_humidity = 0
-
 col1.metric(
     "Current Temperature",
-    f"{latest_temp} °C"
+    f"{latest_temp:.2f} °C"
 )
 
 col2.metric(
     "Current Humidity",
-    f"{latest_humidity} %"
+    f"{latest_humidity:.2f} %"
 )
 
 col3.metric(
-    "MySQL Records",
-    len(temperature_df)
+    "Measurements",
+    len(measurement_df)
 )
 
 col4.metric(
-    "MongoDB Documents",
-    len(humidity_df)
+    "Alerts",
+    len(alerts_df)
 )
 
-st.divider()
+col5, col6, col7, col8 = st.columns(4)
 
-# ==========================
-# Temperature Chart
-# ==========================
+col5.metric(
+    "Average Temp",
+    f"{avg_temp:.2f} °C"
+)
 
-st.subheader("🌡 Temperature Data")
+col6.metric(
+    "Average Humidity",
+    f"{avg_humidity:.2f} %"
+)
 
-if not temperature_df.empty:
+col7.metric(
+    "Maximum Temp",
+    f"{max_temp:.2f} °C"
+)
 
-    chart_df = temperature_df.sort_values(
-        by="timestamp"
+col8.metric(
+    "Maximum Humidity",
+    f"{max_humidity:.2f} %"
+)
+
+st.markdown("---")
+# =====================================
+# TEMPERATURE CHART
+# =====================================
+
+st.subheader("🌡 Temperature Trend")
+
+if not measurement_df.empty:
+
+    temp_chart = measurement_df.copy()
+
+    temp_chart["timestamp"] = pd.to_datetime(
+        temp_chart["timestamp"]
     )
 
+    temp_chart = temp_chart.sort_values("timestamp")
+
     st.line_chart(
-        chart_df.set_index("timestamp")["temperature"]
+        temp_chart.set_index("timestamp")["temperature"]
+    )
+
+else:
+
+    st.warning("No temperature data available.")
+
+# =====================================
+# HUMIDITY CHART
+# =====================================
+
+st.subheader("💧 Humidity Trend")
+
+if not measurement_df.empty:
+
+    humidity_chart = measurement_df.copy()
+
+    humidity_chart["timestamp"] = pd.to_datetime(
+        humidity_chart["timestamp"]
+    )
+
+    humidity_chart = humidity_chart.sort_values("timestamp")
+
+    st.line_chart(
+        humidity_chart.set_index("timestamp")["humidity"]
+    )
+
+else:
+
+    st.warning("No humidity data available.")
+
+st.markdown("---")
+
+# =====================================
+# LATEST MEASUREMENTS
+# =====================================
+
+st.subheader("📊 Latest Measurements")
+
+if measurement_df.empty:
+
+    st.info("No measurements found.")
+
+else:
+
+    st.dataframe(
+        measurement_df.head(15),
+        use_container_width=True
+    )
+
+st.markdown("---")
+
+# =====================================
+# ALERTS
+# =====================================
+
+st.subheader("🚨 Latest Alerts")
+
+if alerts_df.empty:
+
+    st.success("No alerts have been generated.")
+
+else:
+
+    latest_alert = alerts_df.iloc[0]
+
+    if latest_alert["severity"] == "Critical":
+
+        st.error(
+            f"{latest_alert['alert_type']} - {latest_alert['message']}"
+        )
+
+    elif latest_alert["severity"] == "Warning":
+
+        st.warning(
+            f"{latest_alert['alert_type']} - {latest_alert['message']}"
+        )
+
+    st.dataframe(
+        alerts_df.head(10),
+        use_container_width=True
+    )
+
+st.markdown("---")
+
+# =====================================
+# DEVICES (MongoDB)
+# =====================================
+
+st.subheader("📱 Registered Devices (MongoDB)")
+
+if device_df.empty:
+
+    st.info("No devices found.")
+
+else:
+
+    st.metric(
+        "Registered Devices",
+        len(device_df)
     )
 
     st.dataframe(
-        temperature_df.head(20)
+        device_df,
+        use_container_width=True
     )
 
-# ==========================
-# Humidity Chart
-# ==========================
+st.markdown("---")
 
-st.subheader("💧 Humidity Data")
+# =====================================
+# NEO4J SUMMARY
+# =====================================
 
-if not humidity_df.empty:
+st.subheader("🌐 Campus Network (Neo4j)")
 
-    humidity_df["timestamp"] = pd.to_datetime(
-        humidity_df["timestamp"]
-    )
+c1, c2, c3, c4 = st.columns(4)
 
-    humidity_df = humidity_df.sort_values(
-        by="timestamp"
-    )
+c1.metric(
+    "Sensors",
+    sensor_count
+)
 
-    st.line_chart(
-        humidity_df.set_index("timestamp")["humidity"]
-    )
+c2.metric(
+    "Rooms",
+    room_count
+)
 
-    st.dataframe(
-        humidity_df.tail(20)
-    )
+c3.metric(
+    "Buildings",
+    building_count
+)
+
+c4.metric(
+    "Gateways",
+    gateway_count
+)
+
+st.markdown("---")
+
+# =====================================
+# PROJECT INFORMATION
+# =====================================
+
+with st.expander("ℹ Project Information"):
+
+    st.write("""
+This project demonstrates an IoT Environmental Monitoring System.
+
+Technologies Used
+
+• Python
+
+• MQTT (Mosquitto)
+
+• MySQL
+
+• MongoDB
+
+• Neo4j
+
+• Streamlit
+
+Database Usage
+
+• MySQL stores environmental measurements.
+
+• MongoDB stores device metadata.
+
+• Neo4j stores the relationships between sensors,
+  rooms, gateways and buildings.
+
+Developed for Database Mod B.
+""")
+
+st.markdown("---")
+
+st.caption(
+    "Smart Campus Environmental Monitoring System | University of Messina"
+)
+
